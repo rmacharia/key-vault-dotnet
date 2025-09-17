@@ -11,7 +11,7 @@ variables:
 trigger:
   branches:
     include:
-      - main # Trigger on main branch commits
+      - main
   paths:
     exclude:
       - README.md
@@ -23,7 +23,7 @@ stages:
   - job: Build
     displayName: 'Build Application'
     pool:
-      name: 'onprem-server-01' # Match your agent pool name
+      name: 'onprem-server-01'
     steps:
     - task: UseDotNet@2
       displayName: 'Use .NET 9.0 SDK'
@@ -48,7 +48,7 @@ stages:
       displayName: 'Publish Artifacts'
       inputs:
         command: 'publish'
-        projects: '**/key-vault-dotnet-core-quickstart.csproj' # Web app project
+        projects: '**/key-vault-dotnet-core-quickstart.csproj'
         arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)'
         publishWebProjects: false
 
@@ -67,7 +67,7 @@ stages:
   - job: Deploy
     displayName: 'Deploy Application'
     pool:
-      name: 'onprem-server-01' # Same agent pool
+      name: 'onprem-server-01'
     steps:
     - download: current
       artifact: 'drop'
@@ -76,17 +76,17 @@ stages:
     - task: AzureKeyVault@2
       displayName: 'Fetch Key Vault Secrets'
       inputs:
-        azureSubscription: 'Azure-Connection-Name' # Name of your Azure service connection
+        azureSubscription: 'Azure-Connection-Name'
         KeyVaultName: '$(keyVaultName)'
-        SecretsFilter: 'AppSecret' # Secret to fetch
+        SecretsFilter: 'AppSecret'
         RunAsPreJob: false
 
     - task: PowerShell@2
       displayName: 'Deploy to On-Premise Server'
       inputs:
         targetType: 'filePath'
-        filePath: '$(Pipeline.Workspace)/drop/deploy.ps1' # Path to deployment script
+        filePath: '$(Pipeline.Workspace)/drop/deploy.ps1'
         arguments: > 
           -TargetDir '$(targetDirectory)' 
-          -SecretValue '$(AppSecret)' # Injected secret from Key Vault
+          -SecretValue '$(AppSecret)'
         pwsh: true
