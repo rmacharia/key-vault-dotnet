@@ -1,81 +1,83 @@
-// <directives>
 using System;
 using System.Threading.Tasks;
-using Microsoft.Azure.KeyVault;
+using Azure.Identity;
 using Azure.Security.KeyVault.Secrets;
-using Microsoft.IdentityModel.Clients.ActiveDirectory;
-using Microsoft.Azure.Management.ResourceManager.Fluent;
-using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
-// </directives>
 
 namespace akvdotnet
 {
     class Program
     {
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
-            Program P = new Program();
+            Program p = new Program();
             string secretName = "AppSecret";
-
+            
             // kvURL must be updated to the URL of your key vault
             string kvURL = "https://rgvault254.vault.azure.net/";
-
-            // <authentication>
-
-            string clientId = Environment.GetEnvironmentVariable("akvClientId");
-            string clientSecret = Environment.GetEnvironmentVariable("akvClientSecret");
-
-            KeyVaultClient kvClient = new KeyVaultClient(async (authority, resource, scope) =>
-            {
-                var adCredential = new ClientCredential(clientId, clientSecret);
-                var authenticationContext = new AuthenticationContext(authority, null);
-                return (await authenticationContext.AcquireTokenAsync(resource, adCredential)).AccessToken;
-            });
-            // </authentication>
-
-
+            
+            // Modern authentication using DefaultAzureCredential
+            // This will use environment variables, managed identity, or Azure CLI
+            var client = new SecretClient(new Uri(kvURL), new DefaultAzureCredential());
+            
             Console.Write("Input the value of your secret > ");
             string secretValue = Console.ReadLine();
-
-            Console.WriteLine("Your secret is '" + secretValue + "'.");
-
+            
+            Console.WriteLine($"Your secret is '{secretValue}'.");
+            
             Console.Write("Saving the value of your secret to your key vault ...");
-
-            // <setsecret>
-            var result = P.SetSecret(kvClient, kvURL, secretName, secretValue);
-            // </setsecret>
-            System.Threading.Thread.Sleep(5000);
-
+            
+            // Set secret
+            var result = await p.SetSecret(client, secretName, secretValue);
+            
+            await Task.Delay(2000); // Replace Thread.Sleep with async delay
+            
             Console.WriteLine("done.");
-
+            
             Console.WriteLine("Forgetting your secret.");
             secretValue = "";
-            Console.WriteLine("Your secret is '" + secretValue + "'.");
+            Console.WriteLine($"Your secret is '{secretValue}'.");
             Console.WriteLine("Retrieving your secret from key vault.");
-
-            var fetchedSecret = P.GetSecret(kvClient, kvURL, secretName);
-
-            secretValue = fetchedSecret.Result;
-            Console.WriteLine("Your secret is " + secretValue);
+            
+            var fetchedSecret = await p.GetSecret(client, secretName);
+            
+            secretValue = fetchedSecret;
+            Console.WriteLine($"Your secret is {secretValue}");
         }
-
-
-        /// <returns> The created or the updated secret </returns>
-        public async Task<bool> SetSecret(KeyVaultClient kvClient, string kvURL, string secretName, string secretValue)
+        
+        /// <summary>
+        /// Sets a secret in the Key Vault
+        /// </summary>
+        /// <returns>True if successful</returns>
+        public async Task<bool> SetSecret(SecretClient client, string secretName, string secretValue)
         {
-            // <setsecret>
-            await kvClient.SetSecretAsync($"{kvURL}", secretName, secretValue);
-            // </setsecret>
-
-            return true;
+            try
+            {
+                await client.SetSecretAsync(secretName, secretValue);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error setting secret: {ex.Message}");
+                return false;
+            }
         }
-
-        public async Task<string> GetSecret(KeyVaultClient kvClient, string kvURL, string secretName)
+        
+        /// <summary>
+        /// Gets a secret from the Key Vault
+        /// </summary>
+        /// <returns>The secret value</returns>
+        public async Task<string> GetSecret(SecretClient client, string secretName)
         {
-            // <getsecret>                
-            var keyvaultSecret = await kvClient.GetSecretAsync($"{kvURL}", secretName).ConfigureAwait(false);
-            // </getsecret>
-            return keyvaultSecret.Value;
+            try
+            {
+                var keyvaultSecret = await client.GetSecretAsync(secretName);
+                return keyvaultSecret.Value.Value;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error getting secret: {ex.Message}");
+                return string.Empty;
+            }
         }
     }
 }
